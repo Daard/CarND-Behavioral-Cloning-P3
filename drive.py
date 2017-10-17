@@ -20,7 +20,7 @@ sio = socketio.Server()
 app = Flask(__name__)
 model = None
 prev_image_array = None
-
+import cv2
 
 class SimplePIController:
     def __init__(self, Kp, Ki):
@@ -44,9 +44,20 @@ class SimplePIController:
 
 
 controller = SimplePIController(0.1, 0.002)
-set_speed = 19
+set_speed = 25
 controller.set_desired(set_speed)
 
+def preprocess(image):
+    # I used nvidia's preprocess function
+    # Crop
+    cropped  = image[70:135,10:350]
+    # Resize
+    resized = cv2.resize(cropped, (200, 66), interpolation=cv2.INTER_AREA)
+    # Blur
+    blurred = cv2.GaussianBlur(resized, (5,5), 0)
+    # Convert RGB!!!! to YUV
+    final_image = cv2.cvtColor(blurred, cv2.COLOR_RGB2YUV)
+    return final_image
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -61,7 +72,9 @@ def telemetry(sid, data):
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
-        steering_angle = float(model.predict(image_array[None, :, :, :], batch_size=1))
+        # preprocess
+        preprocessed_image = preprocess(image_array)
+        steering_angle = float(model.predict(preprocessed_image[None, :, :, :], batch_size=1))
 
         throttle = controller.update(float(speed))
 
